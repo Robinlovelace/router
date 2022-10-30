@@ -11,6 +11,7 @@ route(
   n_print = 10,
   list_output = FALSE,
   cl = NULL,
+  batch = FALSE,
   ...
 )
 }
@@ -29,6 +30,8 @@ should be shown}
 Set to TRUE to save output as a list.}
 
 \item{cl}{Cluster}
+
+\item{batch}{Route in batch mode? \code{FALSE} by default.}
 
 \item{...}{Arguments passed to the routing function}
 }

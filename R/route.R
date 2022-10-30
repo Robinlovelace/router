@@ -14,6 +14,7 @@
 #' @param cl Cluster
 #' @param wait How long to wait between routes?
 #'   0 seconds by default, can be useful when sending requests to rate limited APIs.
+#' @param batch Route in batch mode? `FALSE` by default.
 #' @family routes
 #' @export
 #' @examples
@@ -23,30 +24,30 @@
 #' odroutes = route(odsf)
 #' plot(odroutes)
 route = function(desire_lines = NULL, route_fun = cyclestreets::journey, wait = 0,
-                  n_print = 10, list_output = FALSE, cl = NULL, ...) {
+                  n_print = 10, list_output = FALSE, cl = NULL, batch = FALSE, ...) {
   FUN = match.fun(route_fun)
-  if (requireNamespace("opentripplanner", quietly = TRUE)) {
-    if (identical(FUN, opentripplanner::otp_plan) && !is.null(desire_lines)) {
-      message("Routing in batch mode with OTP")
-      l_origins_sf = lwgeom::st_startpoint(desire_lines)
-      l_destinations_sf = lwgeom::st_endpoint(desire_lines)
-      l_origins_matrix = sf::st_coordinates(l_origins_sf)
-      l_destinations_matrix = sf::st_coordinates(l_destinations_sf)
-      routes_out = opentripplanner::otp_plan(
+  
+  # browser()
+  # generate od coordinates
+  ldf = od::od_coordinates(desire_lines)
+  
+  # Check for batch mode
+  if(requireNamespace("opentripplanner", quietly = TRUE)) {
+    batch = identical(FUN, opentripplanner::otp_plan)
+  }
+  
+  if (batch) {
+      message("Routing in batch mode")
+      l_origins_matrix = ldf[, 1:2]
+      l_destinations_matrix = ldf[, 3:4]
+      routes_out = FUN(
         fromPlace = l_origins_matrix,
         toPlace = l_destinations_matrix,
         ...
         )
       return(routes_out)
-    }
   }
 
-  # generate od coordinates
-  ldf = od::od_coordinates(desire_lines)
-  # calculate line data frame
-  if (is.null(desire_lines)) {
-    desire_lines= od::odc_to_sf(ldf)
-  }
   # Check the CRS before trying to do routing:
   # https://github.com/ropensci/stplanr/issues/474
   if(!sf::st_is_longlat(desire_lines)) {
@@ -67,7 +68,6 @@ route = function(desire_lines = NULL, route_fun = cyclestreets::journey, wait = 
       list_out = pbapply::pblapply(1:nrow(desire_lines), function(i) route_i(FUN, ldf, wait, i, desire_lines, ...), cl = cl)
     }
   }
-  # browser()
 
   list_elements_sf = most_common_class_of_list(list_out, "sf")
   if (sum(list_elements_sf) < length(list_out)) {
