@@ -5,9 +5,7 @@
 \title{Plan routes on the transport network}
 \usage{
 route(
-  desire_line = NULL,
-  from = NULL,
-  to = NULL,
+  desire_lines = NULL,
   route_fun = cyclestreets::journey,
   wait = 0,
   n_print = 10,
@@ -17,11 +15,7 @@ route(
 )
 }
 \arguments{
-\item{desire_line}{A spatial (linestring) object}
-
-\item{from}{Object representing start points of trips}
-
-\item{to}{Object representing destination points of trips}
+\item{desire_lines}{A spatial (linestring) object}
 
 \item{route_fun}{A routing function to be used for converting the lines to routes}
 
@@ -47,6 +41,7 @@ The definition of optimal depends on the routing function used
 # Todo: add examples
 library(od)
 odsf = od_to_sf(od_data_df[1:2, ], od_data_zones)
+od::od_coordinates(odsf)
 odroutes = route(odsf)
 plot(odroutes)
 }

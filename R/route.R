@@ -4,9 +4,7 @@
 #' and returns the result as a spatial (sf or sp) object.
 #' The definition of optimal depends on the routing function used
 #' 
-#' @param desire_line A spatial (linestring) object
-#' @param from Object representing start points of trips
-#' @param to Object representing destination points of trips
+#' @param desire_lines A spatial (linestring) object
 #' @param route_fun A routing function to be used for converting the lines to routes
 #' @param n_print A number specifying how frequently progress updates
 #' should be shown
@@ -19,42 +17,19 @@
 #' @family routes
 #' @export
 #' @examples
-#' # Todo: add examples
 #' library(od)
 #' odsf = od_to_sf(od_data_df[1:2, ], od_data_zones)
+#' od::od_coordinates(odsf)
 #' odroutes = route(odsf)
 #' plot(odroutes)
-route <- function(desire_line = NULL, from = NULL, to = NULL,
-                  route_fun = cyclestreets::journey, wait = 0,
+route <- function(desire_lines = NULL, route_fun = cyclestreets::journey, wait = 0,
                   n_print = 10, list_output = FALSE, cl = NULL, ...) {
-  UseMethod(generic = "route")
-}
-#' @export
-route.numeric <- function(from = NULL, to = NULL, desire_line= NULL,
-                          route_fun = cyclestreets::journey, wait = 0.1,
-                          n_print = 10, list_output = FALSE, cl = NULL, ...) {
-  odm <- od::od_coordinates(from, to)
-  desire_line<- od::odc_to_sf(odm)
-  route(desire_line, route_fun = route_fun, ...)
-}
-#' @export
-route.character <- function(from = NULL, to = NULL, desire_line= NULL,
-                            route_fun = cyclestreets::journey, wait = 0.1,
-                            n_print = 10, list_output = FALSE, cl = NULL, ...) {
-  odm <- od::od_coordinates(from, to)
-  desire_line<- od::odc_to_sf(odm)
-  route(desire_line, route_fun = route_fun, ...)
-}
-#' @export
-route.sf <- function(from = NULL, to = NULL, desire_line= NULL,
-                     route_fun = cyclestreets::journey, wait = 0.1,
-                     n_print = 10, list_output = FALSE, cl = NULL, ...) {
   FUN <- match.fun(route_fun)
   if (requireNamespace("opentripplanner", quietly = TRUE)) {
-    if (identical(FUN, opentripplanner::otp_plan) && !is.null(desire_line)) {
+    if (identical(FUN, opentripplanner::otp_plan) && !is.null(desire_lines)) {
       message("Routing in batch mode with OTP")
-      l_origins_sf = lwgeom::st_startpoint(desire_line)
-      l_destinations_sf = lwgeom::st_endpoint(desire_line)
+      l_origins_sf = lwgeom::st_startpoint(desire_lines)
+      l_destinations_sf = lwgeom::st_endpoint(desire_lines)
       l_origins_matrix = sf::st_coordinates(l_origins_sf)
       l_destinations_matrix = sf::st_coordinates(l_destinations_sf)
       routes_out = opentripplanner::otp_plan(
@@ -67,29 +42,29 @@ route.sf <- function(from = NULL, to = NULL, desire_line= NULL,
   }
 
   # generate od coordinates
-  ldf <- od::od_coordinates(from, to, desire_line)
+  ldf <- od::od_coordinates(desire_lines)
   # calculate line data frame
-  if (is.null(desire_line)) {
-    desire_line<- od::odc_to_sf(ldf)
+  if (is.null(desire_lines)) {
+    desire_lines<- od::odc_to_sf(ldf)
   }
   # Check the CRS before trying to do routing:
   # https://github.com/ropensci/stplanr/issues/474
-  if(!sf::st_is_longlat(desire_line)) {
+  if(!sf::st_is_longlat(desire_lines)) {
     warning("CRS of line object is not geographic (in degrees lon/lat)")
-    message("It has the following CRS: ", sf::st_crs(desire_line))
+    message("It has the following CRS: ", sf::st_crs(desire_lines))
     message("See ?st_transform() to transform its CRS, e.g. to EPSG 4326")
   }
   if (list_output) {
     if (is.null(cl)) {
-      list_out <- pbapply::pblapply(1:nrow(desire_line), function(i) route_l(FUN, ldf, i, desire_line, ...))
+      list_out <- pbapply::pblapply(1:nrow(desire_lines), function(i) route_l(FUN, ldf, i, desire_lines, ...))
     } else {
-      list_out <- pbapply::pblapply(1:nrow(desire_line), function(i) route_l(FUN, ldf, i, desire_line, ...), cl = cl)
+      list_out <- pbapply::pblapply(1:nrow(desire_lines), function(i) route_l(FUN, ldf, i, desire_lines, ...), cl = cl)
     }
   } else {
     if (is.null(cl)) {
-      list_out <- pbapply::pblapply(1:nrow(desire_line), function(i) route_i(FUN, ldf, wait, i, desire_line, ...))
+      list_out <- pbapply::pblapply(1:nrow(desire_lines), function(i) route_i(FUN, ldf, wait, i, desire_lines, ...))
     } else {
-      list_out <- pbapply::pblapply(1:nrow(desire_line), function(i) route_i(FUN, ldf, wait, i, desire_line, ...), cl = cl)
+      list_out <- pbapply::pblapply(1:nrow(desire_lines), function(i) route_i(FUN, ldf, wait, i, desire_lines, ...), cl = cl)
     }
   }
   # browser()
@@ -123,7 +98,7 @@ route.sf <- function(from = NULL, to = NULL, desire_line= NULL,
 }
 
 # output sf objects
-route_i <- function(FUN, ldf, wait, i, desire_line, ...) {
+route_i <- function(FUN, ldf, wait, i, desire_lines, ...) {
   Sys.sleep(wait)
   error_fun <- function(e) {
     e
@@ -132,7 +107,7 @@ route_i <- function(FUN, ldf, wait, i, desire_line, ...) {
     {
       single_route <- FUN(ldf[i, 1:2], ldf[i, 3:4], ...)
       sf::st_sf(cbind(
-        sf::st_drop_geometry(desire_line[rep(i, nrow(single_route)), ]),
+        sf::st_drop_geometry(desire_lines[rep(i, nrow(single_route)), ]),
         route_number = i,
         sf::st_drop_geometry(single_route)
       ),
@@ -144,7 +119,7 @@ route_i <- function(FUN, ldf, wait, i, desire_line, ...) {
 }
 
 # output whatever the routing function returns
-route_l <- function(FUN, ldf, i, desire_line, ...) {
+route_l <- function(FUN, ldf, i, desire_lines, ...) {
   error_fun <- function(e) {
     e
   }
@@ -156,8 +131,8 @@ route_l <- function(FUN, ldf, i, desire_line, ...) {
   )
 }
 
-most_common_class_of_list <- function(desire_line, class_to_find = "sf") {
-  class_out <- sapply(desire_line, function(x) class(x)[1])
+most_common_class_of_list <- function(desire_lines, class_to_find = "sf") {
+  class_out <- sapply(desire_lines, function(x) class(x)[1])
   most_common_class <- names(sort(table(class_out), decreasing = TRUE)[1])
   message("Most common output is ", most_common_class)
   is_class <- class_out == class_to_find
