@@ -5,9 +5,9 @@
 \title{Plan routes on the transport network}
 \usage{
 route(
+  desire_line = NULL,
   from = NULL,
   to = NULL,
-  l = NULL,
   route_fun = cyclestreets::journey,
   wait = 0,
   n_print = 10,
@@ -17,7 +17,11 @@ route(
 )
 }
 \arguments{
-\item{l}{A spatial (linestring) object}
+\item{desire_line}{A spatial (linestring) object}
+
+\item{from}{Object representing start points of trips}
+
+\item{to}{Object representing destination points of trips}
 
 \item{route_fun}{A routing function to be used for converting the lines to routes}
 

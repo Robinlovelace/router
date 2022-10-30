@@ -3,8 +3,10 @@
 #' Takes origins and destinations, finds the optimal routes between them
 #' and returns the result as a spatial (sf or sp) object.
 #' The definition of optimal depends on the routing function used
-#'
-#' @param l A spatial (linestring) object
+#' 
+#' @param desire_line A spatial (linestring) object
+#' @param from Object representing start points of trips
+#' @param to Object representing destination points of trips
 #' @param route_fun A routing function to be used for converting the lines to routes
 #' @param n_print A number specifying how frequently progress updates
 #' should be shown
@@ -22,37 +24,37 @@
 #' odsf = od_to_sf(od_data_df[1:2, ], od_data_zones)
 #' odroutes = route(odsf)
 #' plot(odroutes)
-route <- function(from = NULL, to = NULL, l = NULL,
+route <- function(desire_line = NULL, from = NULL, to = NULL,
                   route_fun = cyclestreets::journey, wait = 0,
                   n_print = 10, list_output = FALSE, cl = NULL, ...) {
   UseMethod(generic = "route")
 }
 #' @export
-route.numeric <- function(from = NULL, to = NULL, l = NULL,
+route.numeric <- function(from = NULL, to = NULL, desire_line= NULL,
                           route_fun = cyclestreets::journey, wait = 0.1,
                           n_print = 10, list_output = FALSE, cl = NULL, ...) {
   odm <- od::od_coordinates(from, to)
-  l <- od::odc_to_sf(odm)
-  route(l, route_fun = route_fun, ...)
+  desire_line<- od::odc_to_sf(odm)
+  route(desire_line, route_fun = route_fun, ...)
 }
 #' @export
-route.character <- function(from = NULL, to = NULL, l = NULL,
+route.character <- function(from = NULL, to = NULL, desire_line= NULL,
                             route_fun = cyclestreets::journey, wait = 0.1,
                             n_print = 10, list_output = FALSE, cl = NULL, ...) {
   odm <- od::od_coordinates(from, to)
-  l <- od::odc_to_sf(odm)
-  route(l, route_fun = route_fun, ...)
+  desire_line<- od::odc_to_sf(odm)
+  route(desire_line, route_fun = route_fun, ...)
 }
 #' @export
-route.sf <- function(from = NULL, to = NULL, l = NULL,
+route.sf <- function(from = NULL, to = NULL, desire_line= NULL,
                      route_fun = cyclestreets::journey, wait = 0.1,
                      n_print = 10, list_output = FALSE, cl = NULL, ...) {
   FUN <- match.fun(route_fun)
   if (requireNamespace("opentripplanner", quietly = TRUE)) {
-    if (identical(FUN, opentripplanner::otp_plan) && !is.null(l)) {
+    if (identical(FUN, opentripplanner::otp_plan) && !is.null(desire_line)) {
       message("Routing in batch mode with OTP")
-      l_origins_sf = lwgeom::st_startpoint(l)
-      l_destinations_sf = lwgeom::st_endpoint(l)
+      l_origins_sf = lwgeom::st_startpoint(desire_line)
+      l_destinations_sf = lwgeom::st_endpoint(desire_line)
       l_origins_matrix = sf::st_coordinates(l_origins_sf)
       l_destinations_matrix = sf::st_coordinates(l_destinations_sf)
       routes_out = opentripplanner::otp_plan(
@@ -65,29 +67,29 @@ route.sf <- function(from = NULL, to = NULL, l = NULL,
   }
 
   # generate od coordinates
-  ldf <- od::od_coordinates(from, to, l)
+  ldf <- od::od_coordinates(from, to, desire_line)
   # calculate line data frame
-  if (is.null(l)) {
-    l <- od::odc_to_sf(ldf)
+  if (is.null(desire_line)) {
+    desire_line<- od::odc_to_sf(ldf)
   }
   # Check the CRS before trying to do routing:
   # https://github.com/ropensci/stplanr/issues/474
-  if(!sf::st_is_longlat(l)) {
+  if(!sf::st_is_longlat(desire_line)) {
     warning("CRS of line object is not geographic (in degrees lon/lat)")
-    message("It has the following CRS: ", sf::st_crs(l))
+    message("It has the following CRS: ", sf::st_crs(desire_line))
     message("See ?st_transform() to transform its CRS, e.g. to EPSG 4326")
   }
   if (list_output) {
     if (is.null(cl)) {
-      list_out <- pbapply::pblapply(1:nrow(l), function(i) route_l(FUN, ldf, i, l, ...))
+      list_out <- pbapply::pblapply(1:nrow(desire_line), function(i) route_l(FUN, ldf, i, desire_line, ...))
     } else {
-      list_out <- pbapply::pblapply(1:nrow(l), function(i) route_l(FUN, ldf, i, l, ...), cl = cl)
+      list_out <- pbapply::pblapply(1:nrow(desire_line), function(i) route_l(FUN, ldf, i, desire_line, ...), cl = cl)
     }
   } else {
     if (is.null(cl)) {
-      list_out <- pbapply::pblapply(1:nrow(l), function(i) route_i(FUN, ldf, wait, i, l, ...))
+      list_out <- pbapply::pblapply(1:nrow(desire_line), function(i) route_i(FUN, ldf, wait, i, desire_line, ...))
     } else {
-      list_out <- pbapply::pblapply(1:nrow(l), function(i) route_i(FUN, ldf, wait, i, l, ...), cl = cl)
+      list_out <- pbapply::pblapply(1:nrow(desire_line), function(i) route_i(FUN, ldf, wait, i, desire_line, ...), cl = cl)
     }
   }
   # browser()
@@ -121,7 +123,7 @@ route.sf <- function(from = NULL, to = NULL, l = NULL,
 }
 
 # output sf objects
-route_i <- function(FUN, ldf, wait, i, l, ...) {
+route_i <- function(FUN, ldf, wait, i, desire_line, ...) {
   Sys.sleep(wait)
   error_fun <- function(e) {
     e
@@ -130,7 +132,7 @@ route_i <- function(FUN, ldf, wait, i, l, ...) {
     {
       single_route <- FUN(ldf[i, 1:2], ldf[i, 3:4], ...)
       sf::st_sf(cbind(
-        sf::st_drop_geometry(l[rep(i, nrow(single_route)), ]),
+        sf::st_drop_geometry(desire_line[rep(i, nrow(single_route)), ]),
         route_number = i,
         sf::st_drop_geometry(single_route)
       ),
@@ -142,7 +144,7 @@ route_i <- function(FUN, ldf, wait, i, l, ...) {
 }
 
 # output whatever the routing function returns
-route_l <- function(FUN, ldf, i, l, ...) {
+route_l <- function(FUN, ldf, i, desire_line, ...) {
   error_fun <- function(e) {
     e
   }
@@ -154,8 +156,8 @@ route_l <- function(FUN, ldf, i, l, ...) {
   )
 }
 
-most_common_class_of_list <- function(l, class_to_find = "sf") {
-  class_out <- sapply(l, function(x) class(x)[1])
+most_common_class_of_list <- function(desire_line, class_to_find = "sf") {
+  class_out <- sapply(desire_line, function(x) class(x)[1])
   most_common_class <- names(sort(table(class_out), decreasing = TRUE)[1])
   message("Most common output is ", most_common_class)
   is_class <- class_out == class_to_find
