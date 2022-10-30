@@ -3,7 +3,7 @@
 #' Takes origins and destinations, finds the optimal routes between them
 #' and returns the result as a spatial (sf or sp) object.
 #' The definition of optimal depends on the routing function used
-#' 
+#'
 #' @param desire_lines A spatial (linestring) object
 #' @param route_fun A routing function to be used for converting the lines to routes
 #' @param n_print A number specifying how frequently progress updates
@@ -22,9 +22,9 @@
 #' od::od_coordinates(odsf)
 #' odroutes = route(odsf)
 #' plot(odroutes)
-route <- function(desire_lines = NULL, route_fun = cyclestreets::journey, wait = 0,
+route = function(desire_lines = NULL, route_fun = cyclestreets::journey, wait = 0,
                   n_print = 10, list_output = FALSE, cl = NULL, ...) {
-  FUN <- match.fun(route_fun)
+  FUN = match.fun(route_fun)
   if (requireNamespace("opentripplanner", quietly = TRUE)) {
     if (identical(FUN, opentripplanner::otp_plan) && !is.null(desire_lines)) {
       message("Routing in batch mode with OTP")
@@ -42,10 +42,10 @@ route <- function(desire_lines = NULL, route_fun = cyclestreets::journey, wait =
   }
 
   # generate od coordinates
-  ldf <- od::od_coordinates(desire_lines)
+  ldf = od::od_coordinates(desire_lines)
   # calculate line data frame
   if (is.null(desire_lines)) {
-    desire_lines<- od::odc_to_sf(ldf)
+    desire_lines= od::odc_to_sf(ldf)
   }
   # Check the CRS before trying to do routing:
   # https://github.com/ropensci/stplanr/issues/474
@@ -56,22 +56,22 @@ route <- function(desire_lines = NULL, route_fun = cyclestreets::journey, wait =
   }
   if (list_output) {
     if (is.null(cl)) {
-      list_out <- pbapply::pblapply(1:nrow(desire_lines), function(i) route_l(FUN, ldf, i, desire_lines, ...))
+      list_out = pbapply::pblapply(1:nrow(desire_lines), function(i) route_l(FUN, ldf, i, desire_lines, ...))
     } else {
-      list_out <- pbapply::pblapply(1:nrow(desire_lines), function(i) route_l(FUN, ldf, i, desire_lines, ...), cl = cl)
+      list_out = pbapply::pblapply(1:nrow(desire_lines), function(i) route_l(FUN, ldf, i, desire_lines, ...), cl = cl)
     }
   } else {
     if (is.null(cl)) {
-      list_out <- pbapply::pblapply(1:nrow(desire_lines), function(i) route_i(FUN, ldf, wait, i, desire_lines, ...))
+      list_out = pbapply::pblapply(1:nrow(desire_lines), function(i) route_i(FUN, ldf, wait, i, desire_lines, ...))
     } else {
-      list_out <- pbapply::pblapply(1:nrow(desire_lines), function(i) route_i(FUN, ldf, wait, i, desire_lines, ...), cl = cl)
+      list_out = pbapply::pblapply(1:nrow(desire_lines), function(i) route_i(FUN, ldf, wait, i, desire_lines, ...), cl = cl)
     }
   }
   # browser()
 
-  list_elements_sf <- most_common_class_of_list(list_out, "sf")
+  list_elements_sf = most_common_class_of_list(list_out, "sf")
   if (sum(list_elements_sf) < length(list_out)) {
-    failing_routes <- which(!list_elements_sf)
+    failing_routes = which(!list_elements_sf)
     message("These routes failed: ", paste0(failing_routes, collapse = ", "))
     message("The first of which was:")
     print(list_out[[failing_routes[1]]])
@@ -82,30 +82,30 @@ route <- function(desire_lines = NULL, route_fun = cyclestreets::journey, wait =
   }
   if (requireNamespace("data.table", quietly = TRUE)) {
     # warning("data.table used to create the sf object, bounding box may be incorrect.")
-    out_dt <- data.table::rbindlist(list_out[list_elements_sf])
+    out_dt = data.table::rbindlist(list_out[list_elements_sf])
     attribute_names = !names(out_dt) %in% "geometry"
-    
-    out_dtsf <- sf::st_sf(out_dt[attribute_names], geometry = out_dt$geometry)
+
+    out_dtsf = sf::st_sf(out_dt[attribute_names], geometry = out_dt$geometry)
     # attributes(out_dtsf$geometry)
     # identical(sf::st_bbox(out_dtsf), sf::st_bbox(out_sf)) # FALSE
     attr(out_dtsf$geometry, "bbox") = sfheaders::sf_bbox(out_dtsf)
     # identical(sf::st_bbox(out_dtsf), sf::st_bbox(out_sf)) # TRUE
     return(out_dtsf)
   } else {
-    out_sf <- do.call(rbind, list_out[list_elements_sf])
+    out_sf = do.call(rbind, list_out[list_elements_sf])
     out_sf
   }
 }
 
 # output sf objects
-route_i <- function(FUN, ldf, wait, i, desire_lines, ...) {
+route_i = function(FUN, ldf, wait, i, desire_lines, ...) {
   Sys.sleep(wait)
-  error_fun <- function(e) {
+  error_fun = function(e) {
     e
   }
   tryCatch(
     {
-      single_route <- FUN(ldf[i, 1:2], ldf[i, 3:4], ...)
+      single_route = FUN(ldf[i, 1:2], ldf[i, 3:4], ...)
       sf::st_sf(cbind(
         sf::st_drop_geometry(desire_lines[rep(i, nrow(single_route)), ]),
         route_number = i,
@@ -119,22 +119,22 @@ route_i <- function(FUN, ldf, wait, i, desire_lines, ...) {
 }
 
 # output whatever the routing function returns
-route_l <- function(FUN, ldf, i, desire_lines, ...) {
-  error_fun <- function(e) {
+route_l = function(FUN, ldf, i, desire_lines, ...) {
+  error_fun = function(e) {
     e
   }
   tryCatch(
     {
-      single_route <- FUN(ldf[i, 1:2], ldf[i, 3:4], ...)
+      single_route = FUN(ldf[i, 1:2], ldf[i, 3:4], ...)
     },
     error = error_fun
   )
 }
 
-most_common_class_of_list <- function(desire_lines, class_to_find = "sf") {
-  class_out <- sapply(desire_lines, function(x) class(x)[1])
-  most_common_class <- names(sort(table(class_out), decreasing = TRUE)[1])
+most_common_class_of_list = function(desire_lines, class_to_find = "sf") {
+  class_out = sapply(desire_lines, function(x) class(x)[1])
+  most_common_class = names(sort(table(class_out), decreasing = TRUE)[1])
   message("Most common output is ", most_common_class)
-  is_class <- class_out == class_to_find
+  is_class = class_out == class_to_find
   is_class
 }

@@ -38,7 +38,6 @@ and returns the result as a spatial (sf or sp) object.
 The definition of optimal depends on the routing function used
 }
 \examples{
-# Todo: add examples
 library(od)
 odsf = od_to_sf(od_data_df[1:2, ], od_data_zones)
 od::od_coordinates(odsf)
