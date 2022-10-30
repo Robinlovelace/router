@@ -4,7 +4,6 @@
 #' and returns the result as a spatial (sf or sp) object.
 #' The definition of optimal depends on the routing function used
 #'
-#' @inheritParams od_coords
 #' @param l A spatial (linestring) object
 #' @param route_fun A routing function to be used for converting the lines to routes
 #' @param n_print A number specifying how frequently progress updates
@@ -12,7 +11,6 @@
 #' @param list_output If FALSE (default) assumes spatial (linestring) object output.
 #' Set to TRUE to save output as a list.
 #' @param ... Arguments passed to the routing function
-#' @family routes
 #' @param cl Cluster
 #' @param wait How long to wait between routes?
 #'   0 seconds by default, can be useful when sending requests to rate limited APIs.
@@ -20,6 +18,10 @@
 #' @export
 #' @examples
 #' # Todo: add examples
+#' library(od)
+#' odsf = od_to_sf(od_data_df[1:2, ], od_data_zones)
+#' odroutes = route(odsf)
+#' plot(odroutes)
 route <- function(from = NULL, to = NULL, l = NULL,
                   route_fun = cyclestreets::journey, wait = 0,
                   n_print = 10, list_output = FALSE, cl = NULL, ...) {
@@ -29,16 +31,16 @@ route <- function(from = NULL, to = NULL, l = NULL,
 route.numeric <- function(from = NULL, to = NULL, l = NULL,
                           route_fun = cyclestreets::journey, wait = 0.1,
                           n_print = 10, list_output = FALSE, cl = NULL, ...) {
-  odm <- od_coords(from, to)
-  l <- od_coords2line(odm)
+  odm <- od::od_coordinates(from, to)
+  l <- od::odc_to_sf(odm)
   route(l, route_fun = route_fun, ...)
 }
 #' @export
 route.character <- function(from = NULL, to = NULL, l = NULL,
                             route_fun = cyclestreets::journey, wait = 0.1,
                             n_print = 10, list_output = FALSE, cl = NULL, ...) {
-  odm <- od_coords(from, to)
-  l <- od_coords2line(odm)
+  odm <- od::od_coordinates(from, to)
+  l <- od::odc_to_sf(odm)
   route(l, route_fun = route_fun, ...)
 }
 #' @export
@@ -63,10 +65,10 @@ route.sf <- function(from = NULL, to = NULL, l = NULL,
   }
 
   # generate od coordinates
-  ldf <- od_coords(from, to, l)
+  ldf <- od::od_coordinates(from, to, l)
   # calculate line data frame
   if (is.null(l)) {
-    l <- od_coords2line(ldf)
+    l <- od::odc_to_sf(ldf)
   }
   # Check the CRS before trying to do routing:
   # https://github.com/ropensci/stplanr/issues/474
@@ -88,6 +90,7 @@ route.sf <- function(from = NULL, to = NULL, l = NULL,
       list_out <- pbapply::pblapply(1:nrow(l), function(i) route_i(FUN, ldf, wait, i, l, ...), cl = cl)
     }
   }
+  # browser()
 
   list_elements_sf <- most_common_class_of_list(list_out, "sf")
   if (sum(list_elements_sf) < length(list_out)) {
@@ -101,10 +104,11 @@ route.sf <- function(from = NULL, to = NULL, l = NULL,
     return(list_out)
   }
   if (requireNamespace("data.table", quietly = TRUE)) {
-    # browser()
     # warning("data.table used to create the sf object, bounding box may be incorrect.")
     out_dt <- data.table::rbindlist(list_out[list_elements_sf])
-    out_dtsf <- sf::st_sf(out_dt[, !"geometry"], geometry = out_dt$geometry)
+    attribute_names = !names(out_dt) %in% "geometry"
+    
+    out_dtsf <- sf::st_sf(out_dt[attribute_names], geometry = out_dt$geometry)
     # attributes(out_dtsf$geometry)
     # identical(sf::st_bbox(out_dtsf), sf::st_bbox(out_sf)) # FALSE
     attr(out_dtsf$geometry, "bbox") = sfheaders::sf_bbox(out_dtsf)
