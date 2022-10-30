@@ -27,24 +27,59 @@ route = function(desire_lines = NULL, route_fun = cyclestreets::journey, wait = 
                   n_print = 10, list_output = FALSE, cl = NULL, batch = FALSE, ...) {
   FUN = match.fun(route_fun)
   
-  # browser()
+  browser()
   # generate od coordinates
   ldf = od::od_coordinates(desire_lines)
   
   # Check for batch mode
-  if(requireNamespace("opentripplanner", quietly = TRUE)) {
+  if(requireNamespace("opentripplanner", quietly = TRUE) && !batch) {
     batch = identical(FUN, opentripplanner::otp_plan)
+  }
+  if(requireNamespace("r5r", quietly = TRUE) && !batch) {
+    batch = identical(FUN, r5r::detailed_itineraries)
   }
   
   if (batch) {
       message("Routing in batch mode")
-      l_origins_matrix = ldf[, 1:2]
-      l_destinations_matrix = ldf[, 3:4]
-      routes_out = FUN(
-        fromPlace = l_origins_matrix,
-        toPlace = l_destinations_matrix,
-        ...
+      f_mat = ldf[, 1:2]
+      t_mat = ldf[, 3:4]
+      if(identical(FUN, opentripplanner::otp_plan)) {
+        routes_out = FUN(
+          fromPlace = f_mat,
+          toPlace = t_mat,
+          ...
         )
+      }
+      if(identical(FUN, r5r::detailed_itineraries)) {
+        f_df = data.frame(id = desire_lines[[1]], lon = f_mat[, 1], lat = f_mat[, 2])
+        t_df = data.frame(id = desire_lines[[2]], lon = t_mat[, 1], lat = t_mat[, 2])
+        routes_out = FUN(
+          origins = f_df,
+          destinations = t_df,
+          ...
+        )
+      }
+      
+      nrow_diff = 1 - (nrow(routes_out) / nrow(desire_lines))
+      if(nrow_diff == 0) {
+        message("Routes calculated for every desire line")
+        message("Binding new columns to the data")
+        routes_out = sf::st_sf(
+          cbind(
+            sf::st_drop_geometry(desire_lines),
+            sf::st_drop_geometry(routes_out)
+          ),
+          geometry = routes_out$geometry
+        )
+      }
+      if(nrow_diff > 0) {
+        message(round(nrow_diff * 100, digits = 2), "% routes missing")
+        d_df = sf::st_drop_geometry(desire_lines)
+        d_df$id = paste(d_df[[1]], d_df[[2]])
+        routes_out$id = paste(routes_out[["fromId"]], routes_out[["toId"]])
+        routes_out = dplyr::right_join(d_df, routes_out, by = "id")
+      }
+
       return(routes_out)
   }
 
