@@ -20,14 +20,13 @@
 #' @examples
 #' library(od)
 #' odsf = od_to_sf(od_data_df[1:2, ], od_data_zones)
-#' od::od_coordinates(odsf)
 #' odroutes = route(odsf)
 #' plot(odroutes)
 route = function(desire_lines = NULL, route_fun = cyclestreets::journey, wait = 0,
                   n_print = 10, list_output = FALSE, cl = NULL, batch = FALSE, ...) {
   FUN = match.fun(route_fun)
   
-  browser()
+  # browser()
   # generate od coordinates
   ldf = od::od_coordinates(desire_lines)
   
@@ -72,12 +71,13 @@ route = function(desire_lines = NULL, route_fun = cyclestreets::journey, wait = 
           geometry = routes_out$geometry
         )
       }
+      # browser()
       if(nrow_diff > 0) {
         message(round(nrow_diff * 100, digits = 2), "% routes missing")
         d_df = sf::st_drop_geometry(desire_lines)
         d_df$id = paste(d_df[[1]], d_df[[2]])
-        routes_out$id = paste(routes_out[["fromId"]], routes_out[["toId"]])
-        routes_out = dplyr::right_join(d_df, routes_out, by = "id")
+        routes_out$id = paste(routes_out[["from_id"]], routes_out[["to_id"]])
+        routes_out = dplyr::inner_join(routes_out, d_df, by = "id")
       }
 
       return(routes_out)

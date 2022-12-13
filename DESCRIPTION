@@ -16,4 +16,7 @@ Imports:
     sfheaders
 Suggests: 
     data.table,
-    opentripplanner
+    opentripplanner,
+    cyclestreets,
+    r5r,
+    osrm
